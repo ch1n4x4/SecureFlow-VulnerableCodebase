@@ -1,4 +1,4 @@
-name: Gitleaks
+name: DevSecOps Pipeline
 
 on:
   push:
