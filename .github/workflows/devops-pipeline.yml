@@ -17,8 +17,15 @@ jobs:
       - name: Install Gitleaks
         run: |
           curl -sSfL \
-            https://raw.githubusercontent.com/gitleaks/gitleaks/master/scripts/install.sh \
-            | sh -s -- -b /usr/local/bin
+            https://github.com/gitleaks/gitleaks/releases/latest/download/gitleaks-linux-x64.tar.gz \
+            -o gitleaks.tar.gz
+
+          tar -xzf gitleaks.tar.gz gitleaks
+          sudo mv gitleaks /usr/local/bin/gitleaks
+
+      - name: Verify Gitleaks
+        run: |
+          gitleaks version
 
       - name: Run Gitleaks
         run: |
