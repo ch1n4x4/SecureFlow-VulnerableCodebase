@@ -1,0 +1,52 @@
+title = "SecureFlow Gitleaks Configuration"
+
+[extend]
+useDefault = true
+
+# ---------------------------------------------------------------------------
+# SecureFlow-specific secret rules
+# ---------------------------------------------------------------------------
+
+[[rules]]
+id = "secureflow-aws-access-key-id"
+description = "SecureFlow AWS access key ID"
+regex = '''(?i)\b***REMOVED***\s*[:=]\s*["']?([^\s"',]+)["']?'''
+secretGroup = 1
+keywords = ["***REMOVED***"]
+tags = ["secureflow", "aws", "credential"]
+
+
+[[rules]]
+id = "secureflow-aws-secret-access-key"
+description = "SecureFlow AWS secret access key"
+regex = '''(?i)\b***REMOVED***\s*[:=]\s*["']?([^\s"',]+)["']?'''
+secretGroup = 1
+keywords = ["***REMOVED***"]
+tags = ["secureflow", "aws", "credential"]
+
+
+[[rules]]
+id = "secureflow-ath-db-password"
+description = "SecuureFlow authentication database password"
+regex = '''(?i)\b***REMOVED***\s*[:=]\s*["']?([^\s"',]+)["']?'''
+secretGroup = 1
+keywords = ["***REMOVED***"]
+tags = ["secureflow", "database", "password"]
+
+
+[[rules]]
+id = "secureflow-transaction-db-password"
+description = "SecureFlow transaction database password"
+regex = '''(?i)\b***REMOVED***\s*[:=]\s*["']?([^\s"',]+)["']?'''
+secretGroup = 1
+keywords = ["***REMOVED***"]
+tags = ["secureflow", "database", "password"]
+
+
+[[rules]]
+id = "secureflow-jwt-secret"
+description = "SecureFlow JWT signing secret"
+regex = '''(?i)\b***REMOVED***\s*[:=]\s*["']?([^\s"',]+)["']?'''
+secretGroup = 1
+keywords = ["***REMOVED***"]
+tags = ["secureflow", "jwt", "secret"]
