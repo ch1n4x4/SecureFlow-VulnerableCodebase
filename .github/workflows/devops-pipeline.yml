@@ -1,10 +1,22 @@
-name: Hello World
+name: Gitleaks
 
 on:
-  workflow_dispatch:
+  push:
+  pull_request:
 
 jobs:
-  hello-world:
-    runs-on: ubuntu-24.04
+  gitleaks:
+    runs-on: ubuntu-latest
+
     steps:
-      - run: echo "Hello World!"
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        with:
+          args: --log-opts='--all'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
