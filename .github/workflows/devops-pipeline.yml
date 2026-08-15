@@ -22,9 +22,13 @@ jobs:
         run: |
           gitleaks version
 
-      - name: Run Gitleaks
+      - name: Run Gitleaks (full history scan)
         run: |
-          gitleaks git \
+          gitleaks detect \
+            --source . \
+            --log-opts='--all' \
+            --config .gitleaks.toml \
+            --report-format json \
+            --report-path gitleaks-report.json \
             --redact \
-            --log-opts="--all" \
-            .
+            --exit-code 1
