@@ -33,6 +33,13 @@ jobs:
             --redact \
             --exit-code 1
 
+      - name: Upload Gitleaks report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitleaks-report
+          path: gitleaks-report.json
+
   sonarqube:
     name: SonarQube
     runs-on: ubuntu-latest
