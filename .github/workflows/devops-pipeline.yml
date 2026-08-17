@@ -206,4 +206,28 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: trivy-kubernetes-report
-          path: trivy-kubernetes-report.json        
+          path: trivy-kubernetes-report.json     
+          
+  checkov-terraform:
+    name: Checkov Terraform Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Checkov
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: infra/terraform/
+          framework: terraform
+          output_format: json
+          output_file_path: checkov-report.json
+          soft_fail: false
+
+      - name: Upload Checkov report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkov-terraform-report
+          path: checkov-report.json
