@@ -182,3 +182,28 @@ jobs:
         with:
           name: trivy-report
           path: trivy-report.json
+
+  trivy-kubernetes:
+    name: Trivy Kubernetes Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Trivy config scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'config'
+          scan-ref: 'infra/kubernetes/'
+          severity: 'HIGH,CRITICAL'
+          exit-code: '1'
+          format: 'json'
+          output: 'trivy-kubernetes-report.json'
+
+      - name: Upload Trivy Kubernetes report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-kubernetes-report
+          path: trivy-kubernetes-report.json        
