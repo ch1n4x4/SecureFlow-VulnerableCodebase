@@ -1,0 +1,84 @@
+name: Security Exception Request
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+
+jobs:
+  security-exception:
+    name: Record /security-exception request
+    if: >-
+      github.event.issue.pull_request &&
+      startsWith(github.event.comment.body, '/security-exception')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+
+    steps:
+      - name: Validate requester and request fields
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          AUTHOR_ASSOCIATION: ${{ github.event.comment.author_association }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          case "$AUTHOR_ASSOCIATION" in
+            OWNER|MEMBER|COLLABORATOR) ;;
+            *)
+              gh issue comment "$PR_NUMBER" \
+                --repo "$REPOSITORY" \
+                --body "The /security-exception request was not recorded. The commenter must be a repository owner, organization member, or collaborator."
+              exit 1
+              ;;
+          esac
+
+          reason="$(printf '%s\n' "$COMMENT_BODY" | sed -n 's/^reason:[[:space:]]*//p' | head -n1)"
+          ticket="$(printf '%s\n' "$COMMENT_BODY" | sed -n 's/^ticket:[[:space:]]*//p' | head -n1)"
+          expires="$(printf '%s\n' "$COMMENT_BODY" | sed -n 's/^expires:[[:space:]]*//p' | head -n1)"
+          scope="$(printf '%s\n' "$COMMENT_BODY" | sed -n 's/^scope:[[:space:]]*//p' | head -n1)"
+
+          if [[ -z "$reason" || -z "$ticket" || -z "$expires" || -z "$scope" ]]; then
+            gh issue comment "$PR_NUMBER" \
+              --repo "$REPOSITORY" \
+              --body $'Security exception request is missing required fields.\n\nUse:\n/security-exception\nreason: <why the bypass is needed>\nticket: <tracking ticket URL/ID>\nexpires: <YYYY-MM-DD>\nscope: <exact finding(s)/scanner(s)>\n\nThis command records a request only; it does not automatically bypass the security gate.'
+            exit 1
+          fi
+
+          if ! [[ "$expires" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+            gh issue comment "$PR_NUMBER" \
+              --repo "$REPOSITORY" \
+              --body "Security exception request rejected: expires must use YYYY-MM-DD."
+            exit 1
+          fi
+
+          # Ensure the tracking label exists before applying it.
+          gh label create security-exception-requested \
+            --repo "$REPOSITORY" \
+            --color F9E2AF \
+            --description "Security gate exception request awaiting review" \
+            --force >/dev/null
+
+          gh issue edit "$PR_NUMBER" \
+            --repo "$REPOSITORY" \
+            --add-label security-exception-requested
+
+          response="$(printf "%s\\n\\n%s\\n%s\\n%s\\n%s\\n\\n%s\\n" \
+            "Security exception request recorded for review." \
+            "**Reason:** $reason" \
+            "**Ticket:** $ticket" \
+            "**Expires:** $expires" \
+            "**Scope:** $scope" \
+            "No automatic security-gate bypass was granted. Approval must be documented by the designated security approver.")
+
+          gh issue comment "$PR_NUMBER" \
+            --repo "$REPOSITORY" \
+            --body "$response"
