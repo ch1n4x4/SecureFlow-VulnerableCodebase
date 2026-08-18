@@ -4,8 +4,16 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: security-gate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   gitleaks:
+    name: Gitleaks
     runs-on: macos-latest
 
     steps:
@@ -15,15 +23,14 @@ jobs:
           fetch-depth: 0
 
       - name: Install Gitleaks
-        run: |
-          brew install gitleaks
+        run: brew install gitleaks
 
       - name: Verify Gitleaks
-        run: |
-          gitleaks version
+        run: gitleaks version
 
       - name: Run Gitleaks (full history scan)
         run: |
+          set +e
           gitleaks detect \
             --source . \
             --log-opts='--all' \
@@ -32,6 +39,12 @@ jobs:
             --report-path gitleaks-report.json \
             --redact \
             --exit-code 1
+          status=$?
+          if [ "$status" -ne 0 ] && [ "$status" -ne 1 ]; then
+            echo "::error::Gitleaks execution failed with exit code $status."
+            exit "$status"
+          fi
+          echo "Gitleaks findings are collected by the security gate."
 
       - name: Upload Gitleaks report
         if: always()
@@ -39,6 +52,7 @@ jobs:
         with:
           name: gitleaks-report
           path: gitleaks-report.json
+          if-no-files-found: warn
 
   sonarqube:
     name: SonarQube
@@ -46,7 +60,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -58,7 +72,7 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
-      - name: Export findings and check severity
+      - name: Export findings
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_PROJECT_KEY: ${{ env.SONAR_PROJECT_KEY }}
@@ -71,13 +85,7 @@ jobs:
             --data-urlencode "ps=500" \
             "https://sonarcloud.io/api/issues/search" \
             -o sonar-findings.json
-
-          if jq -e '.issues[] | select(.severity == "CRITICAL" or .severity == "BLOCKER")' sonar-findings.json > /dev/null; then
-            echo "::error::CRITICAL or BLOCKER findings detected."
-            exit 1
-          fi
-
-          echo "No CRITICAL or BLOCKER findings."
+          jq empty sonar-findings.json
 
       - name: Upload SonarQube findings
         if: always()
@@ -96,85 +104,43 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build auth-service
-        run: |
-          docker build \
-            -t auth-service:${{ github.sha }} \
-            ./services/auth-service
+        run: docker build -t auth-service:${{ github.sha }} ./services/auth-service
 
       - name: Build frontend
-        run: |
-          docker build \
-            -t frontend:${{ github.sha }} \
-            ./services/frontend
+        run: docker build -t frontend:${{ github.sha }} ./services/frontend
 
       - name: Build transaction-service
-        run: |
-          docker build \
-            -t transaction-service:${{ github.sha }} \
-            ./services/transaction-service
+        run: docker build -t transaction-service:${{ github.sha }} ./services/transaction-service
 
       - name: Install Trivy
         run: |
           sudo apt-get update
           sudo apt-get install -y wget apt-transport-https gnupg
-
           wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | \
             gpg --dearmor | \
             sudo tee /usr/share/keyrings/trivy.gpg > /dev/null
-
           echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb generic main" | \
             sudo tee /etc/apt/sources.list.d/trivy.list
-
           sudo apt-get update
           sudo apt-get install -y trivy
 
       - name: Scan auth-service
-        run: |
-          trivy image \
-            --severity HIGH,CRITICAL \
-            --format json \
-            --output auth-service.json \
-            auth-service:${{ github.sha }}
+        run: trivy image --severity HIGH,CRITICAL --format json --output auth-service.json auth-service:${{ github.sha }}
 
       - name: Scan frontend
-        run: |
-          trivy image \
-            --severity HIGH,CRITICAL \
-            --format json \
-            --output frontend.json \
-            frontend:${{ github.sha }}
+        run: trivy image --severity HIGH,CRITICAL --format json --output frontend.json frontend:${{ github.sha }}
 
       - name: Scan transaction-service
-        run: |
-          trivy image \
-            --severity HIGH,CRITICAL \
-            --format json \
-            --output transaction-service.json \
-            transaction-service:${{ github.sha }}
+        run: trivy image --severity HIGH,CRITICAL --format json --output transaction-service.json transaction-service:${{ github.sha }}
 
       - name: Combine Trivy reports
         run: |
-          jq -s '{
-            SchemaVersion: 2,
-            Reports: .
-          }' \
-          auth-service.json \
-          frontend.json \
-          transaction-service.json \
-          > trivy-report.json
-
-      - name: Check for HIGH or CRITICAL vulnerabilities
-        run: |
-          if jq -e '
-            [.Reports[].Results[]?.Vulnerabilities[]? |
-              select(.Severity == "HIGH" or .Severity == "CRITICAL")
-            ] | length > 0
-          ' trivy-report.json > /dev/null; then
-            echo "HIGH or CRITICAL vulnerabilities found"
-            exit 1
-          else
-            echo "No HIGH or CRITICAL vulnerabilities found"
-          fi
+          jq -s '{SchemaVersion: 2, Reports: .}' \
+            auth-service.json \
+            frontend.json \
+            transaction-service.json \
+            > trivy-report.json
+          jq empty trivy-report.json
 
       - name: Upload combined Trivy report
         if: always()
@@ -182,6 +148,7 @@ jobs:
         with:
           name: trivy-report
           path: trivy-report.json
+          if-no-files-found: warn
 
   trivy-kubernetes:
     name: Trivy Kubernetes Scan
@@ -194,20 +161,21 @@ jobs:
       - name: Run Trivy config scan
         uses: aquasecurity/trivy-action@master
         with:
-          scan-type: 'config'
-          scan-ref: 'infra/kubernetes/'
-          severity: 'HIGH,CRITICAL'
-          exit-code: '1'
-          format: 'json'
-          output: 'trivy-kubernetes-report.json'
+          scan-type: config
+          scan-ref: infra/kubernetes/
+          severity: HIGH,CRITICAL
+          exit-code: "0"
+          format: json
+          output: trivy-kubernetes-report.json
 
       - name: Upload Trivy Kubernetes report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: trivy-kubernetes-report
-          path: trivy-kubernetes-report.json     
-          
+          path: trivy-kubernetes-report.json
+          if-no-files-found: warn
+
   checkov-terraform:
     name: Checkov Terraform Scan
     runs-on: ubuntu-latest
@@ -223,7 +191,7 @@ jobs:
           framework: terraform
           output_format: json
           output_file_path: checkov-report.json
-          soft_fail: false
+          soft_fail: true
 
       - name: Upload Checkov report
         if: always()
@@ -231,3 +199,76 @@ jobs:
         with:
           name: checkov-terraform-report
           path: checkov-report.json
+          if-no-files-found: warn
+
+  zap:
+    name: ZAP (non-blocking AppSec)
+    runs-on: ubuntu-latest
+    if: ${{ vars.ZAP_BASE_URL != '' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run ZAP baseline scan
+        uses: zaproxy/action-baseline@v0.14.0
+        continue-on-error: true
+        with:
+          target: ${{ vars.ZAP_BASE_URL }}
+          cmd_options: "-J zap-report.json"
+
+      - name: Upload ZAP report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-findings
+          path: zap-report.json
+          if-no-files-found: warn
+
+  security-gate:
+    name: security-gate
+    needs:
+      - gitleaks
+      - sonarqube
+      - trivy-scan
+      - trivy-kubernetes
+      - checkov-terraform
+      - zap
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download scanner reports
+        uses: actions/download-artifact@v4
+        with:
+          path: security-results
+          pattern: "*-report"
+          merge-multiple: true
+
+      - name: Download scanner findings
+        uses: actions/download-artifact@v4
+        with:
+          path: security-results
+          pattern: "*-findings"
+          merge-multiple: true
+        continue-on-error: true
+
+      - name: List downloaded reports
+        run: find security-results -type f -maxdepth 3 -print | sort
+
+      - name: Run security gate
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          APPSEC_INTAKE_URL: ${{ vars.APPSEC_INTAKE_URL }}
+          POLICY_REF: ${{ github.base_ref || github.ref_name }}
+        run: |
+          chmod +x pipeline/scripts/security-gate.sh
+          pipeline/scripts/security-gate.sh
