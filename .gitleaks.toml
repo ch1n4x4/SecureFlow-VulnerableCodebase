@@ -71,3 +71,10 @@ id = "***REMOVED***-uri"
 description = "Full PostgreSQL connection URI with embedded credentials"
 regex = '''***REMOVED***(?:ql)?:\/\/[^:\s]+:[^@\s]+@[^\/\s]+'''
 tags = ["database", "connection-string"]
+
+[[allowlists]]
+description = "Allow Sonar token environment variable reference"
+regexTarget = "secret"
+regexes = [
+  '''^\s*"\$\{SONAR_TOKEN\}:"\s*$'''
+]
