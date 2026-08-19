@@ -33,6 +33,11 @@ variable "environment" {
   default = "dev"
 }
 
+variable "db_password" {
+  type = string
+  default = "***REMOVED***"
+}
+
 module "vpc" {
   source      = "./modules/vpc"
   project     = var.project
@@ -63,5 +68,5 @@ module "rds" {
   environment       = var.environment
   vpc_id            = module.vpc.vpc_id
   public_subnet_ids = module.vpc.public_subnet_ids
-  db_password       = "***REMOVED***" # IV-01 — hardcoded DB password reused from docker-compose.
+  db_password       = var.db_password # IV-01 — hardcoded DB password (REMEDIATED)
 }

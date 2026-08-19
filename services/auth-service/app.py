@@ -11,15 +11,15 @@ from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
-# AV-07 — Hardcoded JWT Secret. Matches the value committed in docker-compose.yml and .env.
-SECRET_KEY = os.getenv("JWT_SECRET", "***REMOVED***")
+# AV-07 — Hardcoded JWT Secret. Matches the value committed in docker-compose.yml and .env. (REMEDIATED)
+SECRET_KEY = os.getenv("JWT_SECRET")
 
 DB_CONFIG = {
     "host": os.getenv("DB_HOST", "auth-db"),
     "port": int(os.getenv("DB_PORT", "5432")),
     "dbname": os.getenv("DB_NAME", "authdb"),
-    "user": os.getenv("DB_USER", "authuser"),
-    "password": os.getenv("DB_PASSWORD", "***REMOVED***"),
+    "user": os.getenv("DB_USER"),
+    "password": os.getenv("DB_PASSWORD"),
 }
 
 

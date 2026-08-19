@@ -15,8 +15,8 @@ DB_CONFIG = {
     "host": os.getenv("DB_HOST", "transaction-db"),
     "port": int(os.getenv("DB_PORT", "5432")),
     "dbname": os.getenv("DB_NAME", "transactiondb"),
-    "user": os.getenv("DB_USER", "txuser"),
-    "password": os.getenv("DB_PASSWORD", "***REMOVED***"),
+    "user": os.getenv("DB_USER"),
+    "password": os.getenv("DB_PASSWORD"),
 }
 
 
