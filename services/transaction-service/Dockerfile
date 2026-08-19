@@ -1,5 +1,5 @@
 # Address CK-01: Upgraded from python:3.9-slim to 3.12-slim and pinned the SHA256 digest
-FROM python:3.12-slim@sha256:2c941e860699f878900b0edc2403613c234d4b32eda3cc9fa7036991a2a63c4a
+FROM python@sha256:2c941e860699f878900b0edc2403613c234d4b32eda3cc9fa7036991a2a63c4a
 
 # Install curl for the HEALTHCHECK command
 RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
