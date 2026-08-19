@@ -78,3 +78,10 @@ regexTarget = "secret"
 regexes = [
   '''^\s*"\$\{SONAR_TOKEN\}:"\s*$'''
 ]
+
+[[allowlists]]
+description = "Allow sanitized secret placeholder"
+regexTarget = "secret"
+regexes = [
+  '''^\*\*\*REMOVED\*\*\*$'''
+]
