@@ -278,6 +278,11 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           APPSEC_INTAKE_URL: ${{ vars.APPSEC_INTAKE_URL }}
           POLICY_REF: ${{ github.base_ref || github.ref_name }}
+          # Pass upstream DevSecOps job statuses into the shell script
+          GITLEAKS_STATUS: ${{ needs.gitleaks.result }}
+          TRIVY_SCAN_STATUS: ${{ needs.trivy-scan.result }}
+          TRIVY_K8S_STATUS: ${{ needs.trivy-kubernetes.result }}
+          CHECKOV_STATUS: ${{ needs.checkov-terraform.result }}
         run: |
           chmod +x pipeline/scripts/security-gate.sh
           pipeline/scripts/security-gate.sh
