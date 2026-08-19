@@ -10,8 +10,8 @@ from flask import Flask, request, session, redirect, url_for, render_template_st
 app = Flask(__name__)
 app.jinja_env.autoescape = False
 
-# FV-03 — Session hijacking. Weak committed secret.
-app.secret_key = os.getenv("SESSION_SECRET", "***REMOVED***")
+# FV-03 — Session hijacking. Weak committed secret. (REMEDIATED)
+app.secret_key = os.getenv("SESSION_SECRET")
 
 AUTH_URL = os.getenv("AUTH_SERVICE_URL", "http://auth-service:5001")
 TX_URL = os.getenv("TRANSACTION_SERVICE_URL", "http://transaction-service:5002")
