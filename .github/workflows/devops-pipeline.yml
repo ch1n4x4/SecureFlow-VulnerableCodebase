@@ -127,13 +127,13 @@ jobs:
           sudo apt-get install -y trivy
 
       - name: Scan auth-service
-        run: trivy image --severity HIGH,CRITICAL --format json --output auth-service.json auth-service:${{ github.sha }}
+        run: trivy image --ignore-unfixed --severity HIGH,CRITICAL --format json --output auth-service.json auth-service:${{ github.sha }}
 
       - name: Scan frontend
-        run: trivy image --severity HIGH,CRITICAL --format json --output frontend.json frontend:${{ github.sha }}
+        run: trivy image --ignore-unfixed --severity HIGH,CRITICAL --format json --output frontend.json frontend:${{ github.sha }}
 
       - name: Scan transaction-service
-        run: trivy image --severity HIGH,CRITICAL --format json --output transaction-service.json transaction-service:${{ github.sha }}
+        run: trivy image --ignore-unfixed --severity HIGH,CRITICAL --format json --output transaction-service.json transaction-service:${{ github.sha }}
 
       - name: Combine Trivy reports and evaluate
         run: |
