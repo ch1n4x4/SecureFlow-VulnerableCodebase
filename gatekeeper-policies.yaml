@@ -1,0 +1,153 @@
+---
+# 1. NO PRIVILEGED CONTAINERS
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8snoprivileged
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sNoPrivileged
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8snoprivileged
+        
+        get_containers(obj) = obj.spec.containers { obj.kind == "Pod" }
+        get_containers(obj) = obj.spec.template.spec.containers { obj.kind != "Pod" }
+        
+        violation[{"msg": msg}] {
+          c := get_containers(input.review.object)[_]
+          c.securityContext.privileged
+          msg := sprintf("Privileged container is not allowed: %v", [c.name])
+        }
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sNoPrivileged
+metadata:
+  name: no-privileged-containers
+spec:
+  match:
+    kinds:
+      - apiGroups: ["", "apps"]
+        kinds: ["Pod", "Deployment", "DaemonSet", "StatefulSet"]
+
+---
+# 2. NO LATEST TAG
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8snolatesttag
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sNoLatestTag
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8snolatesttag
+        
+        get_containers(obj) = obj.spec.containers { obj.kind == "Pod" }
+        get_containers(obj) = obj.spec.template.spec.containers { obj.kind != "Pod" }
+        
+        violation[{"msg": msg}] {
+          c := get_containers(input.review.object)[_]
+          endswith(c.image, ":latest")
+          msg := sprintf("Container '%v' uses the ':latest' tag, which is forbidden.", [c.name])
+        }
+        violation[{"msg": msg}] {
+          c := get_containers(input.review.object)[_]
+          not contains(c.image, ":")
+          msg := sprintf("Container '%v' does not specify a tag (defaults to latest), which is forbidden.", [c.name])
+        }
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sNoLatestTag
+metadata:
+  name: no-latest-tag
+spec:
+  match:
+    kinds:
+      - apiGroups: ["", "apps"]
+        kinds: ["Pod", "Deployment", "DaemonSet", "StatefulSet"]
+
+---
+# 3. REQUIRE RESOURCE LIMITS
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8srequireresourcelimits
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sRequireResourceLimits
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8srequireresourcelimits
+        
+        get_containers(obj) = obj.spec.containers { obj.kind == "Pod" }
+        get_containers(obj) = obj.spec.template.spec.containers { obj.kind != "Pod" }
+        
+        violation[{"msg": msg}] {
+          c := get_containers(input.review.object)[_]
+          not c.resources.limits
+          msg := sprintf("Container '%v' has no resource limits configured.", [c.name])
+        }
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sRequireResourceLimits
+metadata:
+  name: require-resource-limits
+spec:
+  match:
+    kinds:
+      - apiGroups: ["", "apps"]
+        kinds: ["Pod", "Deployment", "DaemonSet", "StatefulSet"]
+
+---
+# 4. REQUIRE LABELS
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8srequirelabels
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sRequireLabels
+      validation:
+        openAPIV3Schema:
+          type: object
+          properties:
+            labels:
+              type: array
+              items:
+                type: string
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8srequirelabels
+        
+        violation[{"msg": msg}] {
+          provided := {label | input.review.object.metadata.labels[label]}
+          required := {label | label := input.parameters.labels[_]}
+          missing := required - provided
+          count(missing) > 0
+          msg := sprintf("You must provide the following missing labels: %v", [missing])
+        }
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sRequireLabels
+metadata:
+  name: require-labels
+spec:
+  match:
+    kinds:
+      - apiGroups: ["", "apps"]
+        kinds: ["Pod", "Deployment", "DaemonSet", "StatefulSet"]
+  parameters:
+    labels: ["team", "environment"] # Enforces that these specific labels must exist
