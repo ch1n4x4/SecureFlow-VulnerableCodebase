@@ -80,8 +80,10 @@ regexes = [
 ]
 
 [[allowlists]]
-description = "Allow sanitized secret placeholder"
-regexTarget = "secret"
 regexes = [
-  '''^\*\*\*REMOVED\*\*\*$'''
+    # Allows generic 'secrets.ANY_NAME' strings
+    '''secrets\.[a-zA-Z0-9_]+''',
+    
+    # Allows the specific GitHub Actions syntax '${{ secrets.ANY_NAME }}'
+    '''\$\{\{\s*secrets\.[a-zA-Z0-9_]+\s*\}\}'''
 ]
