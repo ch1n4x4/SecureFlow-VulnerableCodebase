@@ -14,8 +14,8 @@ spec:
         svc: auth-db
     spec:
       containers:
-        - name: secrets.AUTH_DB_PASSWORD
-          image: secrets.AUTH_DB_PASSWORD:14    # CK-03 — no digest pinning.
+        - name: postgres
+          image: postgres:14    # CK-03 — no digest pinning.
           env:
             - name: POSTGRES_DB
               value: authdb
@@ -57,8 +57,8 @@ spec:
         svc: transaction-db
     spec:
       containers:
-        - name: secrets.AUTH_DB_PASSWORD
-          image: secrets.AUTH_DB_PASSWORD:14
+        - name: postgres
+          image: postgres:14
           env:
             - name: POSTGRES_DB
               value: transactiondb

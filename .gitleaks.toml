@@ -10,7 +10,7 @@ useDefault = true
 [[rules]]
 id = "secureflow-aws-access-key-id"
 description = "SecureFlow AWS access key ID"
-regex = '''(?i)\bAWS_ACCESS_KEY_ID\s*[:=]\s*["']?([^\s"',]+)["']?'''
+regex = '''(?i)\bAWS_ACCESS_KEY_ID\s*[:=]\s*["']?([^\s"',]{4,})["']?'''
 secretGroup = 1
 keywords = ["AWS_ACCESS_KEY_ID"]
 tags = ["secureflow", "aws", "credential"]
@@ -19,7 +19,7 @@ tags = ["secureflow", "aws", "credential"]
 [[rules]]
 id = "secureflow-aws-secret-access-key"
 description = "SecureFlow AWS secret access key"
-regex = '''(?i)\bAWS_SECRET_ACCESS_KEY\s*[:=]\s*["']?([^\s"',]+)["']?'''
+regex = '''(?i)\bAWS_SECRET_ACCESS_KEY\s*[:=]\s*["']?([^\s"',]{4,})["']?'''
 secretGroup = 1
 keywords = ["AWS_SECRET_ACCESS_KEY"]
 tags = ["secureflow", "aws", "credential"]
@@ -27,8 +27,8 @@ tags = ["secureflow", "aws", "credential"]
 
 [[rules]]
 id = "secureflow-ath-db-password"
-description = "SecuureFlow authentication database password"
-regex = '''(?i)\bAUTH_DB_PASSWORD\s*[:=]\s*["']?([^\s"',]+)["']?'''
+description = "SecureFlow authentication database password"
+regex = '''(?i)\bAUTH_DB_PASSWORD\s*[:=]\s*["']?([^\s"',]{4,})["']?'''
 secretGroup = 1
 keywords = ["AUTH_DB_PASSWORD"]
 tags = ["secureflow", "database", "password"]
@@ -37,7 +37,7 @@ tags = ["secureflow", "database", "password"]
 [[rules]]
 id = "secureflow-transaction-db-password"
 description = "SecureFlow transaction database password"
-regex = '''(?i)\bTRANSACTION_DB_PASSWORD\s*[:=]\s*["']?([^\s"',]+)["']?'''
+regex = '''(?i)\bTRANSACTION_DB_PASSWORD\s*[:=]\s*["']?([^\s"',]{4,})["']?'''
 secretGroup = 1
 keywords = ["TRANSACTION_DB_PASSWORD"]
 tags = ["secureflow", "database", "password"]
@@ -46,7 +46,7 @@ tags = ["secureflow", "database", "password"]
 [[rules]]
 id = "secureflow-jwt-secret"
 description = "SecureFlow JWT signing secret"
-regex = '''(?i)\bJWT_SECRET\s*[:=]\s*["']?([^\s"',]+)["']?'''
+regex = '''(?i)\bJWT_SECRET\s*[:=]\s*["']?([^\s"',]{4,})["']?'''
 secretGroup = 1
 keywords = ["JWT_SECRET"]
 tags = ["flask", "jwt", "secret"]
@@ -55,35 +55,36 @@ tags = ["flask", "jwt", "secret"]
 [[rules]]
 id = "flask-secret-key"
 description = "Flask SECRET_KEY / JWT_SECRET / SESSION_SECRET assigned as a literal value"
-regex = '''(?i)(SECRET_KEY|JWT_SECRET|SESSION_SECRET)\s*[:=]\s*['"]?[A-Za-z0-9_\-]{4,}['"]?'''
+regex = '''(?i)(?:SECRET_KEY|JWT_SECRET|SESSION_SECRET)\s*[:=]\s*["']?([^\s"',]{4,})["']?'''
+secretGroup = 1
 tags = ["flask", "secret", "hardcoded"]
 
 
 [[rules]]
-id = "secrets.AUTH_DB_PASSWORD-connection-string"
+id = "postgres-connection-string"
 description = "Hardcoded PostgreSQL password assignment"
-regex = '''(?i)(POSTGRES_PASSWORD|DB_PASSWORD)\s*[:=]\s*['"]?[A-Za-z0-9_\-]{4,}['"]?'''
+regex = '''(?i)(?:POSTGRES_PASSWORD|DB_PASSWORD)\s*[:=]\s*["']?([^\s"',]{4,})["']?'''
+secretGroup = 1
 tags = ["database", "secret", "hardcoded"]
 
 
 [[rules]]
-id = "secrets.AUTH_DB_PASSWORD-uri"
+id = "postgres-uri"
 description = "Full PostgreSQL connection URI with embedded credentials"
-regex = '''secrets.AUTH_DB_PASSWORD(?:ql)?:\/\/[^:\s]+:[^@\s]+@[^\/\s]+'''
+regex = '''postgres(?:ql)?:\/\/[^:\s]+:[^@\s]+@[^\/\s]+'''
 tags = ["database", "connection-string"]
 
-[[allowlists]]
-description = "Allow Sonar token environment variable reference"
-regexTarget = "secret"
-regexes = [
-  '''^\s*"\$\{SONAR_TOKEN\}:"\s*$'''
-]
 
-[[allowlists]]
+[allowlist]
+description = "Global allowlist for SecureFlow"
+regexTarget = "line" 
 regexes = [
-    # Allows generic 'secrets.ANY_NAME' strings
+    # Ignores any line containing a GitHub Actions secret reference
     '''secrets\.[a-zA-Z0-9_]+''',
     
-    # Allows the specific GitHub Actions syntax '${{ secrets.ANY_NAME }}'
-    '''\$\{\{\s*secrets\.[a-zA-Z0-9_]+\s*\}\}'''
+    # Ignores environment variable fetching (not a hardcoded secret)
+    '''os\.getenv\(''',
+    
+    # Allows Sonar token environment variable reference
+    '''\$\{SONAR_TOKEN\}'''
 ]

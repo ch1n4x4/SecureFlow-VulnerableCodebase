@@ -11,7 +11,7 @@ version: "3.8"
 
 services:
   auth-db:
-    image: secrets.AUTH_DB_PASSWORD:14
+    image: postgres:14
     environment:
       POSTGRES_DB: authdb
       POSTGRES_USER: authuser
@@ -23,7 +23,7 @@ services:
       - auth-db-data:/var/lib/secrets.AUTH_DB_PASSWORDql/data
 
   transaction-db:
-    image: secrets.AUTH_DB_PASSWORD:14
+    image: postgres:14
     environment:
       POSTGRES_DB: transactiondb
       POSTGRES_USER: txuser
