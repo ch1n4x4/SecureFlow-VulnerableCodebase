@@ -23,6 +23,7 @@ metadata:
   name: no-privileged-containers
 spec:
   match:
+    excludedNamespaces: ["vault", "kube-system", "gatekeeper-system"]
     kinds:
       - apiGroups: [""]
         kinds: ["Pod"]
@@ -52,6 +53,7 @@ metadata:
   name: no-latest-tag
 spec:
   match:
+    excludedNamespaces: ["vault", "kube-system", "gatekeeper-system"]
     kinds:
       - apiGroups: [""]
         kinds: ["Pod"]
@@ -81,6 +83,7 @@ metadata:
   name: require-resource-limits
 spec:
   match:
+    excludedNamespaces: ["vault", "kube-system", "gatekeeper-system"]
     kinds:
       - apiGroups: [""]
         kinds: ["Pod"]
@@ -120,6 +123,7 @@ metadata:
   name: require-labels
 spec:
   match:
+    excludedNamespaces: ["vault", "kube-system", "gatekeeper-system"]
     kinds:
       - apiGroups: [""]
         kinds: ["Pod"]

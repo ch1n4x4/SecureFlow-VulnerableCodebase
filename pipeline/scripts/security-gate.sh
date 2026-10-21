@@ -1,5 +1,3 @@
-# --- REPLACE FROM LINE 163 DOWNWARDS ---
-
 UPSTREAM_FAILED=0
 if [[ "${GITLEAKS_STATUS:-success}" == "failure" ]] || \
    [[ "${TRIVY_SCAN_STATUS:-success}" == "failure" ]] || \

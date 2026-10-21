@@ -12,15 +12,24 @@ spec:
     metadata:
       labels:
         svc: transaction-service
+        env: dev              # Resolved: require-labels
+        owner: devsecops      # Resolved: require-labels
+      annotations:
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/role: "transaction-service"
+        vault.hashicorp.com/agent-inject-secret-config: "secureflow/data/auth-service"
+        # New additions: Satisfy Gatekeeper's resource limits for the injected sidecar
+        vault.hashicorp.com/agent-limits-cpu: "250m"
+        vault.hashicorp.com/agent-limits-mem: "64Mi"
+        vault.hashicorp.com/agent-requests-cpu: "128m"
+        vault.hashicorp.com/agent-requests-mem: "32Mi"
     spec:
+      serviceAccountName: transaction-service
       containers:
         - name: transaction-service
-          image: secureflow/transaction-service:latest   # CK-06
+          image: secureflow/transaction-service:v1.0.0   # Resolved: no-latest-tag
           ports:
             - containerPort: 5002
-          envFrom:
-            - configMapRef:
-                name: secureflow-config
           env:
             - name: DB_HOST
               value: transaction-db
@@ -28,16 +37,16 @@ spec:
               value: transactiondb
             - name: DB_USER
               value: txuser
-            - name: DB_PASSWORD
-              valueFrom:
-                configMapKeyRef:
-                  name: secureflow-config
-                  key: TX_DB_PASSWORD
-          securityContext:
-            privileged: true                # CK-04
-            allowPrivilegeEscalation: true  # CK-04
-            runAsUser: 0                    # CK-02
-          # CK-05 — no resources.
+          securityContext:                               # Resolved: no-privileged-containers
+            allowPrivilegeEscalation: false
+            runAsUser: 1000
+          resources:                                     # Resolved: require-resource-limits
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
 ---
 apiVersion: v1
 kind: Service
