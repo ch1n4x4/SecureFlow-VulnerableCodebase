@@ -20,7 +20,7 @@ services:
       - "5432:5432"          # IV-02 — exposed on host.
     volumes:
       - ./db/auth/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-      - auth-db-data:/var/lib/secrets.AUTH_DB_PASSWORDql/data
+      - auth-db-data:/var/lib/postgresql/data
 
   transaction-db:
     image: postgres:14
@@ -32,7 +32,7 @@ services:
       - "5433:5432"          # IV-02 — exposed on host.
     volumes:
       - ./db/transaction/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-      - transaction-db-data:/var/lib/secrets.AUTH_DB_PASSWORDql/data
+      - transaction-db-data:/var/lib/postgresql/data
 
   auth-service:
     build: ./services/auth-service

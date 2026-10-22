@@ -34,7 +34,7 @@ resource "aws_security_group" "db" {
 
 resource "aws_db_instance" "auth" {
   identifier             = "${var.project}-${var.environment}-authdb"
-  engine                 = "secrets.AUTH_DB_PASSWORD"
+  engine                 = "postgres"
   engine_version         = "14"
   instance_class         = "db.t3.micro"
   allocated_storage      = 20
@@ -54,7 +54,7 @@ resource "aws_db_instance" "auth" {
 
 resource "aws_db_instance" "transactions" {
   identifier             = "${var.project}-${var.environment}-txdb"
-  engine                 = "secrets.AUTH_DB_PASSWORD"
+  engine                 = "postgres"
   engine_version         = "14"
   instance_class         = "db.t3.micro"
   allocated_storage      = 20

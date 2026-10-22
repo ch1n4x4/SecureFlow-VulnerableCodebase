@@ -17,7 +17,7 @@ spec:
       annotations:
         vault.hashicorp.com/agent-inject: "true"
         vault.hashicorp.com/role: "transaction-service"
-        vault.hashicorp.com/agent-inject-secret-config: "secureflow/data/auth-service"
+        vault.hashicorp.com/agent-inject-secret-config: "secureflow/data/transaction-service"
         # New additions: Satisfy Gatekeeper's resource limits for the injected sidecar
         vault.hashicorp.com/agent-limits-cpu: "250m"
         vault.hashicorp.com/agent-limits-mem: "64Mi"

@@ -32,7 +32,7 @@ Read the project brief PDF end-to-end before you touch any code.
                      ▼                      ▼
               ┌────────────┐          ┌────────────────┐
               │  auth-db   │          │ transaction-db │
-              │ secrets.AUTH_DB_PASSWORD   │          │   secrets.AUTH_DB_PASSWORD     │
+              │ postgres   │          │   postgres     │
               └────────────┘          └────────────────┘
 ```
 
