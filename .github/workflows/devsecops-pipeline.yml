@@ -2,7 +2,7 @@ name: SecureFlow 7-Stage DevSecOps Pipeline
 
 on:
   push:
-    branches: ["main", "master", "develop"]
+    branches: ["main", "master", "test"]
   pull_request:
     branches: ["main", "master"]
   schedule:
