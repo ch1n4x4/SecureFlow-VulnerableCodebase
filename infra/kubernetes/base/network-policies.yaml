@@ -1,0 +1,177 @@
+# CK-08 Resolved — Default-deny with explicit service-to-service whitelists
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: secureflow
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+# Allow all pods in secureflow to resolve DNS via kube-system CoreDNS
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns-egress
+  namespace: secureflow
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+# Frontend: allow external ingress on :5000; egress ONLY to auth-service (:5001) and transaction-service (:5002)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: frontend-netpol
+  namespace: secureflow
+spec:
+  podSelector:
+    matchLabels:
+      svc: frontend
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: 5000
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              svc: auth-service
+      ports:
+        - protocol: TCP
+          port: 5001
+    - to:
+        - podSelector:
+            matchLabels:
+              svc: transaction-service
+      ports:
+        - protocol: TCP
+          port: 5002
+---
+# Auth-service: allow ingress on :5001 from frontend and transaction-service; egress ONLY to auth-db (:5432)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: auth-service-netpol
+  namespace: secureflow
+spec:
+  podSelector:
+    matchLabels:
+      svc: auth-service
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              svc: frontend
+        - podSelector:
+            matchLabels:
+              svc: transaction-service
+      ports:
+        - protocol: TCP
+          port: 5001
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              svc: auth-db
+      ports:
+        - protocol: TCP
+          port: 5432
+---
+# Transaction-service: allow ingress on :5002 from frontend; egress ONLY to auth-service (:5001) and transaction-db (:5432)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: transaction-service-netpol
+  namespace: secureflow
+spec:
+  podSelector:
+    matchLabels:
+      svc: transaction-service
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              svc: frontend
+      ports:
+        - protocol: TCP
+          port: 5002
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              svc: auth-service
+      ports:
+        - protocol: TCP
+          port: 5001
+    - to:
+        - podSelector:
+            matchLabels:
+              svc: transaction-db
+      ports:
+        - protocol: TCP
+          port: 5432
+---
+# Auth-db: allow ingress on :5432 ONLY from auth-service
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: auth-db-netpol
+  namespace: secureflow
+spec:
+  podSelector:
+    matchLabels:
+      svc: auth-db
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              svc: auth-service
+      ports:
+        - protocol: TCP
+          port: 5432
+---
+# Transaction-db: allow ingress on :5432 ONLY from transaction-service
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: transaction-db-netpol
+  namespace: secureflow
+spec:
+  podSelector:
+    matchLabels:
+      svc: transaction-db
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              svc: transaction-service
+      ports:
+        - protocol: TCP
+          port: 5432

@@ -1,0 +1,211 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "id": 1,
+      "title": "1. CI/CD Pipeline Pass Rate & Security Gate Status",
+      "type": "stat",
+      "gridPos": { "h": 7, "w": 6, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "secureflow_pipeline_stage_pass_ratio * 100",
+          "legendFormat": "{{stage}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 80 },
+              { "color": "green", "value": 100 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "2. Container CVE Reduction (python:3.9-slim vs python:3.12-slim)",
+      "type": "barchart",
+      "gridPos": { "h": 7, "w": 6, "x": 6, "y": 0 },
+      "targets": [
+        {
+          "expr": "secureflow_trivy_image_cves",
+          "legendFormat": "{{state}} - {{severity}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 4 },
+              { "color": "red", "value": 10 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "3. Falco Runtime Alert Volumes (SecureFlow Namespace)",
+      "type": "bargauge",
+      "gridPos": { "h": 7, "w": 6, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "expr": "secureflow_falco_alerts_total",
+          "legendFormat": "{{rule}} ({{priority}})",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "blue", "value": null },
+              { "color": "orange", "value": 1 },
+              { "color": "red", "value": 3 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "4. OPA Gatekeeper Admission Violations (Before vs After)",
+      "type": "stat",
+      "gridPos": { "h": 7, "w": 6, "x": 18, "y": 0 },
+      "targets": [
+        {
+          "expr": "secureflow_opa_constraint_violations",
+          "legendFormat": "{{policy}} ({{phase}})",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "5. AppSec Finding Volume by Severity Over Time (Routed via Gate)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 6, "x": 0, "y": 7 },
+      "targets": [
+        {
+          "expr": "secureflow_appsec_routed_findings",
+          "legendFormat": "{{scanner}} - {{severity}} ({{category}})",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80
+          }
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "6. OWASP ZAP DAST Findings (Staging Environment)",
+      "type": "piechart",
+      "gridPos": { "h": 8, "w": 6, "x": 6, "y": 7 },
+      "targets": [
+        {
+          "expr": "secureflow_zap_dast_findings",
+          "legendFormat": "{{risk}} - {{finding}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "7. HashiCorp Vault Secret Migration & Rotation Status",
+      "type": "stat",
+      "gridPos": { "h": 8, "w": 6, "x": 12, "y": 7 },
+      "targets": [
+        {
+          "expr": "secureflow_vault_secret_status",
+          "legendFormat": "{{service}} ({{path}})",
+          "refId": "A"
+        },
+        {
+          "expr": "secureflow_committed_secrets_count",
+          "legendFormat": "Committed Git Secrets ({{phase}})",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 2 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 8,
+      "title": "8. Supply Chain Integrity (Cosign Signed & SPDX SBOM) + MTTD (Mins)",
+      "type": "stat",
+      "gridPos": { "h": 8, "w": 6, "x": 18, "y": 7 },
+      "targets": [
+        {
+          "expr": "secureflow_cosign_verified_images * 100",
+          "legendFormat": "Signed & SBOM Attested: {{service}}",
+          "refId": "A"
+        },
+        {
+          "expr": "secureflow_mttd_minutes",
+          "legendFormat": "Mean Time to Detect (Mins)",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "green", "value": 100 }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["secureflow", "devsecops", "security-posture"],
+  "templating": { "list": [] },
+  "time": { "from": "now-1h", "to": "now" },
+  "title": "SecureFlow DevSecOps Security Posture Dashboard",
+  "uid": "secureflow-sec-posture",
+  "version": 1
+}

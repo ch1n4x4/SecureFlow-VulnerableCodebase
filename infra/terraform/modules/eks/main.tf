@@ -1,16 +1,16 @@
 variable "project" { type = string }
 variable "environment" { type = string }
 variable "vpc_id" { type = string }
-variable "public_subnet_ids" { type = list(string) }
+variable "private_subnet_ids" { type = list(string) }
 
-# IV-10 — EKS nodes placed in public subnets with a public API endpoint.
-# Remediation: create private subnets with NAT gateway routing, set
-# endpoint_private_access=true, endpoint_public_access=false (or restrict cidrs),
-# and move node groups into the private subnet IDs.
+resource "aws_kms_key" "eks" {
+  description             = "KMS key for EKS Kubernetes secrets envelope encryption"
+  deletion_window_in_days = 7
+  enable_key_rotation     = true
+}
 
 resource "aws_iam_role" "cluster" {
   name = "${var.project}-${var.environment}-eks-cluster"
-
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -28,27 +28,38 @@ resource "aws_iam_role_policy_attachment" "cluster_policy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
 }
 
+# IV-10 Resolved — Private subnets, private endpoint, KMS secrets encryption, and control plane logging
 resource "aws_eks_cluster" "main" {
   name     = "${var.project}-${var.environment}"
   role_arn = aws_iam_role.cluster.arn
-  version  = "1.28"
+  version  = "1.30"
 
   vpc_config {
-    subnet_ids              = var.public_subnet_ids # IV-10
-    endpoint_private_access = false                  # IV-10
-    endpoint_public_access  = true                   # IV-10
-    public_access_cidrs     = ["0.0.0.0/0"]          # IV-10
+    subnet_ids              = var.private_subnet_ids
+    endpoint_private_access = true
+    endpoint_public_access  = false
   }
 
-  # Deliberately missing: encryption_config for secrets at rest.
-  # Deliberately missing: enabled_cluster_log_types.
+  encryption_config {
+    provider {
+      key_arn = aws_kms_key.eks.arn
+    }
+    resources = ["secrets"]
+  }
+
+  enabled_cluster_log_types = [
+    "api",
+    "audit",
+    "authenticator",
+    "controllerManager",
+    "scheduler"
+  ]
 
   depends_on = [aws_iam_role_policy_attachment.cluster_policy]
 }
 
 resource "aws_iam_role" "node_group" {
   name = "${var.project}-${var.environment}-eks-node"
-
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -61,17 +72,28 @@ resource "aws_iam_role" "node_group" {
   })
 }
 
-# IV-08 — node group role also gets AdministratorAccess.
-resource "aws_iam_role_policy_attachment" "node_admin" {
+# IV-08 Resolved — Least-privilege managed policies replacing AdministratorAccess
+resource "aws_iam_role_policy_attachment" "node_worker" {
   role       = aws_iam_role.node_group.name
-  policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
 }
 
+resource "aws_iam_role_policy_attachment" "node_cni" {
+  role       = aws_iam_role.node_group.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
+}
+
+resource "aws_iam_role_policy_attachment" "node_ecr" {
+  role       = aws_iam_role.node_group.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+}
+
+# IV-10 Resolved — EKS worker nodes deployed into private subnets
 resource "aws_eks_node_group" "main" {
   cluster_name    = aws_eks_cluster.main.name
   node_group_name = "${var.project}-${var.environment}-ng"
   node_role_arn   = aws_iam_role.node_group.arn
-  subnet_ids      = var.public_subnet_ids # IV-10 — nodes in public subnets.
+  subnet_ids      = var.private_subnet_ids
 
   scaling_config {
     desired_size = 2
@@ -80,6 +102,12 @@ resource "aws_eks_node_group" "main" {
   }
 
   instance_types = ["t3.medium"]
+
+  depends_on = [
+    aws_iam_role_policy_attachment.node_worker,
+    aws_iam_role_policy_attachment.node_cni,
+    aws_iam_role_policy_attachment.node_ecr
+  ]
 }
 
 output "cluster_name" {

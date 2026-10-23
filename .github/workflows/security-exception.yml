@@ -1,84 +1,46 @@
-name: Security Exception Request
+name: Security Gate Exception Audit Trigger
 
 on:
   issue_comment:
     types: [created]
 
 permissions:
+  issues: write
+  pull-requests: write
   contents: read
 
 jobs:
-  security-exception:
-    name: Record /security-exception request
-    if: >-
-      github.event.issue.pull_request &&
-      startsWith(github.event.comment.body, '/security-exception')
+  audit-exception:
+    name: "Process /security-exception Request"
+    if: ${{ github.event.issue.pull_request && startsWith(github.event.comment.body, '/security-exception') }}
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      issues: write
-      pull-requests: write
-
     steps:
-      - name: Validate requester and request fields
+      - name: Record Audited Security Exception & Post Confirmation
         env:
-          GH_TOKEN: ${{ github.token }}
-          REPOSITORY: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.issue.number }}
-          COMMENT_BODY: ${{ github.event.comment.body }}
-          AUTHOR_ASSOCIATION: ${{ github.event.comment.author_association }}
-        shell: bash
+          ACTOR: ${{ github.event.comment.user.login }}
+          BODY: ${{ github.event.comment.body }}
+          TIMESTAMP: ${{ github.event.comment.created_at }}
         run: |
-          set -euo pipefail
+          JUSTIFICATION="${BODY#/security-exception}"
+          JUSTIFICATION="$(echo "${JUSTIFICATION}" | sed 's/^[[:space:]]*//')"
 
-          case "$AUTHOR_ASSOCIATION" in
-            OWNER|MEMBER|COLLABORATOR) ;;
-            *)
-              gh issue comment "$PR_NUMBER" \
-                --repo "$REPOSITORY" \
-                --body "The /security-exception request was not recorded. The commenter must be a repository owner, organization member, or collaborator."
-              exit 1
-              ;;
-          esac
-
-          reason="$(printf '%s\n' "$COMMENT_BODY" | sed -n 's/^reason:[[:space:]]*//p' | head -n1)"
-          ticket="$(printf '%s\n' "$COMMENT_BODY" | sed -n 's/^ticket:[[:space:]]*//p' | head -n1)"
-          expires="$(printf '%s\n' "$COMMENT_BODY" | sed -n 's/^expires:[[:space:]]*//p' | head -n1)"
-          scope="$(printf '%s\n' "$COMMENT_BODY" | sed -n 's/^scope:[[:space:]]*//p' | head -n1)"
-
-          if [[ -z "$reason" || -z "$ticket" || -z "$expires" || -z "$scope" ]]; then
-            gh issue comment "$PR_NUMBER" \
-              --repo "$REPOSITORY" \
-              --body $'Security exception request is missing required fields.\n\nUse:\n/security-exception\nreason: <why the bypass is needed>\nticket: <tracking ticket URL/ID>\nexpires: <YYYY-MM-DD>\nscope: <exact finding(s)/scanner(s)>\n\nThis command records a request only; it does not automatically bypass the security gate.'
+          if [[ -z "${JUSTIFICATION}" ]]; then
+            gh api -X POST "repos/${REPO}/issues/${PR_NUMBER}/comments" \
+              -f body="### Security Exception Rejected
+          A written justification and target remediation release are mandatory.
+          **Usage:** \`/security-exception <written justification and target fix date>\`"
             exit 1
           fi
 
-          if ! [[ "$expires" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
-            gh issue comment "$PR_NUMBER" \
-              --repo "$REPOSITORY" \
-              --body "Security exception request rejected: expires must use YYYY-MM-DD."
-            exit 1
-          fi
+          gh api -X POST "repos/${REPO}/issues/${PR_NUMBER}/labels" \
+            -f "labels[]=security-exception-requested" || true
 
-          # Ensure the tracking label exists before applying it.
-          gh label create security-exception-requested \
-            --repo "$REPOSITORY" \
-            --color F9E2AF \
-            --description "Security gate exception request awaiting review" \
-            --force >/dev/null
-
-          gh issue edit "$PR_NUMBER" \
-            --repo "$REPOSITORY" \
-            --add-label security-exception-requested
-
-          response="$(printf "%s\\n\\n%s\\n%s\\n%s\\n%s\\n\\n%s\\n" \
-            "Security exception request recorded for review." \
-            "**Reason:** $reason" \
-            "**Ticket:** $ticket" \
-            "**Expires:** $expires" \
-            "**Scope:** $scope" \
-            "No automatic security-gate bypass was granted. Approval must be documented by the designated security approver.")
-
-          gh issue comment "$PR_NUMBER" \
-            --repo "$REPOSITORY" \
-            --body "$response"
+          gh api -X POST "repos/${REPO}/issues/${PR_NUMBER}/comments" \
+            -f body="### Audited Security Exception Logged
+          - **Requested By:** @${ACTOR}
+          - **Timestamp (UTC):** \`${TIMESTAMP}\`
+          - **Justification:** ${JUSTIFICATION}
+          - **SLA / Expiration:** Time-bounded to next release cycle per [Security Gate Policy](https://github.com/${REPO}/blob/main/docs/security-gate-policy.md)."

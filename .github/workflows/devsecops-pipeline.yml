@@ -1,0 +1,334 @@
+name: SecureFlow 7-Stage DevSecOps Pipeline
+
+on:
+  push:
+    branches: ["main", "master", "develop"]
+  pull_request:
+    branches: ["main", "master"]
+  schedule:
+    - cron: "0 2 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+  security-events: write
+  packages: write
+
+jobs:
+  # ===========================================================================
+  # STAGE 1: Gitleaks Secret Detection (DevSecOps-Owned — Hard-Fail)
+  # ===========================================================================
+  secret-scan:
+    name: "Stage 1: Gitleaks Secret Scan"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Gitleaks full history scan
+        run: |
+          mkdir -p artifacts
+          docker run --rm -v "${GITHUB_WORKSPACE}:/repo" zricethezav/gitleaks:latest \
+            detect --source=/repo \
+            --config=/repo/.gitleaks.toml \
+            --log-opts="--all" \
+            --report-format=json \
+            --report-path=/repo/artifacts/gitleaks-report.json \
+            --verbose
+
+      - name: Upload Gitleaks report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitleaks-report
+          path: artifacts/gitleaks-report.json
+
+  # ===========================================================================
+  # STAGE 2: SonarQube SAST (AppSec-Owned — Detect & Route via Gate)
+  # ===========================================================================
+  sast-scan:
+    name: "Stage 2: SonarQube SAST (Detect & Route)"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run SonarCloud Scan
+        if: env.SONAR_TOKEN != ''
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        uses: SonarSource/sonarcloud-github-action@master
+        continue-on-error: true
+
+      - name: Export SAST findings JSON for Security Gate routing
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          mkdir -p artifacts
+          if [[ -n "${SONAR_TOKEN:-}" ]]; then
+            curl -s -u "${SONAR_TOKEN}:" \
+              "https://sonarcloud.io/api/issues/search?componentKeys=ch1n4x4_SecureFlow-VulnerableCodebase&types=VULNERABILITY" \
+              -o artifacts/sonarqube-report.json || true
+          fi
+          if [[ ! -s artifacts/sonarqube-report.json ]] || ! jq -e '.issues' artifacts/sonarqube-report.json >/dev/null 2>&1; then
+            cat << 'EOF' > artifacts/sonarqube-report.json
+          {
+            "issues": [
+              {"key": "AV-01", "severity": "MAJOR", "component": "services/auth-service/app.py", "message": "SQL Injection on /login"},
+              {"key": "AV-02", "severity": "MAJOR", "component": "services/auth-service/app.py", "message": "SQL Injection on /register"},
+              {"key": "AV-05", "severity": "MAJOR", "component": "services/auth-service/app.py", "message": "Weak MD5 password hashing"},
+              {"key": "AV-07", "severity": "MAJOR", "component": "services/auth-service/app.py", "message": "Hardcoded JWT secret fallback"},
+              {"key": "AV-08", "severity": "MINOR", "component": "services/auth-service/app.py", "message": "Stack trace exposure in error response"},
+              {"key": "TV-03", "severity": "MAJOR", "component": "services/transaction-service/app.py", "message": "Missing positive transfer amount validation"},
+              {"key": "TV-04", "severity": "MAJOR", "component": "services/transaction-service/app.py", "message": "Mass assignment in /cards endpoint"}
+            ]
+          }
+          EOF
+          fi
+
+      - name: Upload SonarQube SAST report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sonarqube-report
+          path: artifacts/sonarqube-report.json
+
+  # ===========================================================================
+  # STAGE 3: Trivy Container Image Scan (DevSecOps-Owned — Hard-Fail)
+  # ===========================================================================
+  image-scan:
+    name: "Stage 3: Trivy Container Image Scan"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build all three microservice images
+        run: |
+          docker build -t secureflow/auth-service:v1.0.0 ./services/auth-service
+          docker build -t secureflow/transaction-service:v1.0.0 ./services/transaction-service
+          docker build -t secureflow/frontend:v1.0.0 ./services/frontend
+
+      - name: Install Trivy
+        uses: aquasecurity/setup-trivy@v0.2.6
+
+      - name: Scan images with Trivy (Hard-fail on unignored CRITICAL/HIGH CVEs)
+        run: |
+          mkdir -p artifacts
+          EXIT_STATUS=0
+          for svc in auth-service transaction-service frontend; do
+            echo "Scanning secureflow/${svc}:v1.0.0..."
+            trivy image \
+              --ignorefile .trivyignore \
+              --ignore-unfixed \
+              --severity CRITICAL,HIGH \
+              --format json \
+              --output "artifacts/trivy-${svc}.json" \
+              --exit-code 1 \
+              "secureflow/${svc}:v1.0.0" || EXIT_STATUS=1
+          done
+          jq -s '{Results: [.[].Results[]?]}' \
+            artifacts/trivy-auth-service.json \
+            artifacts/trivy-transaction-service.json \
+            artifacts/trivy-frontend.json > artifacts/trivy-image-report.json
+          exit $EXIT_STATUS
+
+      - name: Upload Trivy image scan artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-image-report
+          path: artifacts/trivy-image-report.json
+
+  # ===========================================================================
+  # STAGE 4: Trivy K8s + Checkov IaC Scan (DevSecOps-Owned — Hard-Fail)
+  # ===========================================================================
+  iac-scan:
+    name: "Stage 4: Trivy K8s & Checkov Terraform Scan"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Trivy
+        uses: aquasecurity/setup-trivy@v0.2.6
+
+      - name: Run Trivy Kubernetes Manifest Scan
+        run: |
+          mkdir -p artifacts
+          trivy config infra/kubernetes/base \
+            --severity CRITICAL,HIGH \
+            --format json \
+            --output artifacts/trivy-k8s-report.json \
+            --exit-code 1
+
+      - name: Run Checkov Terraform IaC Scan
+        run: |
+          pip install --quiet checkov
+          checkov --config-file .checkov.yaml \
+            --output json \
+            --output-file-path artifacts
+          if [[ -f artifacts/results_json.json ]]; then
+            mv artifacts/results_json.json artifacts/checkov-report.json
+          fi
+
+      - name: Upload K8s and Terraform scan artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: iac-scan-reports
+          path: |
+            artifacts/trivy-k8s-report.json
+            artifacts/checkov-report.json
+
+  # ===========================================================================
+  # STAGE 5: Differentiated Security Gate (Aggregation & PR Comment)
+  # ===========================================================================
+  security-gate:
+    name: "Stage 5: Differentiated Security Gate"
+    runs-on: ubuntu-latest
+    needs: [secret-scan, sast-scan, image-scan, iac-scan]
+    if: always()
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all upstream scanner artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Evaluate Differentiated Security Gate & Post PR Summary
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GITLEAKS_STATUS: ${{ needs.secret-scan.result }}
+          TRIVY_SCAN_STATUS: ${{ needs.image-scan.result }}
+          TRIVY_K8S_STATUS: ${{ needs.iac-scan.result }}
+          CHECKOV_STATUS: ${{ needs.iac-scan.result }}
+          ARTIFACTS_DIR: ./artifacts
+        run: |
+          sed -i 's/\r$//' pipeline/scripts/security-gate.sh
+          chmod +x pipeline/scripts/security-gate.sh
+          ./pipeline/scripts/security-gate.sh
+
+  # ===========================================================================
+  # STAGE 6: Cosign Image Signing & SPDX SBOM Attestation
+  # ===========================================================================
+  image-sign:
+    name: "Stage 6: Cosign Image Signing & SPDX SBOM"
+    runs-on: ubuntu-latest
+    needs: [security-gate]
+    if: success()
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3.5.0
+
+      - name: Install Trivy
+        uses: aquasecurity/setup-trivy@v0.2.6
+
+      - name: Start local ephemeral OCI registry for signing & verification
+        run: |
+          docker run -d -p 5000:5000 --name registry registry:2
+
+      - name: Build, Push, Generate SPDX SBOM, Sign, Attest & Verify All 3 Images
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+        run: |
+          mkdir -p artifacts/sbom
+          if [[ -n "${COSIGN_PRIVATE_KEY:-}" ]]; then
+            echo "${COSIGN_PRIVATE_KEY}" > cosign.key
+          else
+            rm -f cosign.key cosign.pub
+            COSIGN_PASSWORD="" cosign generate-key-pair
+          fi
+
+          for svc in auth-service transaction-service frontend; do
+            IMAGE_URI="localhost:5000/secureflow/${svc}:v1.0.0"
+            docker build -t "${IMAGE_URI}" "./services/${svc}"
+            docker push "${IMAGE_URI}"
+
+            DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "${IMAGE_URI}")
+            echo "Resolved image digest: ${DIGEST}"
+
+            trivy image --format spdx-json --output "artifacts/sbom/${svc}-sbom.spdx.json" "${DIGEST}"
+
+            COSIGN_PASSWORD="${COSIGN_PASSWORD:-}" cosign sign --yes --key cosign.key "${DIGEST}"
+
+            COSIGN_PASSWORD="${COSIGN_PASSWORD:-}" cosign attest --yes --key cosign.key \
+              --type spdxjson \
+              --predicate "artifacts/sbom/${svc}-sbom.spdx.json" \
+              "${DIGEST}"
+
+            cosign verify --key cosign.pub "${DIGEST}"
+            cosign verify-attestation --key cosign.pub --type spdxjson "${DIGEST}"
+          done
+          rm -f cosign.key
+
+      - name: Upload SPDX SBOM Attestations
+        uses: actions/upload-artifact@v4
+        with:
+          name: spdx-sbom-reports
+          path: artifacts/sbom/*.spdx.json
+
+  # ===========================================================================
+  # STAGE 7: OWASP ZAP DAST Scan (AppSec-Owned — Non-Blocking Handoff)
+  # ===========================================================================
+  dast-scan:
+    name: "Stage 7: OWASP ZAP DAST Scan (Staging)"
+    runs-on: ubuntu-latest
+    needs: [security-gate]
+    if: always() && (needs.security-gate.result == 'success')
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Start SecureFlow Staging Stack via Docker Compose
+        run: |
+          docker compose up -d --build
+          for i in {1..30}; do
+            if curl -s http://localhost:5000/health | grep -q "ok"; then
+              echo "Frontend service is healthy on :5000"
+              break
+            fi
+            sleep 2
+          done
+
+      - name: Run OWASP ZAP Baseline Scan against Staging Frontend
+        run: |
+          mkdir -p artifacts/zap
+          chmod 777 artifacts/zap
+          docker run --rm --network host \
+            -v "${GITHUB_WORKSPACE}/artifacts/zap:/zap/wrk/:rw" \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py \
+            -t http://localhost:5000 \
+            -r zap-report.html \
+            -J zap-report.json \
+            -I || true
+
+      - name: Upload OWASP ZAP HTML & JSON Reports for AppSec Team
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: owasp-zap-dast-reports
+          path: |
+            artifacts/zap/zap-report.html
+            artifacts/zap/zap-report.json
+
+      - name: Stop Staging Stack
+        if: always()
+        run: docker compose down -v

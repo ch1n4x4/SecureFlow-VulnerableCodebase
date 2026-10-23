@@ -1,0 +1,46 @@
+# kube-prometheus-stack Helm Values for SecureFlow Security Posture (Step 16)
+alertmanager:
+  enabled: false
+
+kubeStateMetrics:
+  enabled: true
+
+nodeExporter:
+  enabled: true
+
+grafana:
+  enabled: true
+  adminPassword: "admin"
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      access: proxy
+      url: http://loki-stack.observability.svc.cluster.local:3100
+      jsonData:
+        maxLines: 1000
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+      searchNamespace: ALL
+
+prometheus:
+  prometheusSpec:
+    scrapeInterval: 15s
+    additionalScrapeConfigs:
+      # Scrape CI/CD & Security Posture Exporter (Pushgateway)
+      - job_name: "secureflow-security-metrics"
+        honor_labels: true
+        static_configs:
+          - targets: ["prometheus-pushgateway.observability.svc.cluster.local:9091"]
+
+      # Scrape OPA Gatekeeper admission controller metrics
+      - job_name: "opa-gatekeeper"
+        static_configs:
+          - targets: ["gatekeeper-controller-manager-metrics-service.gatekeeper-system.svc.cluster.local:8888"]
+
+      # Scrape Falco / Falcosidekick runtime metrics
+      - job_name: "falco-exporter"
+        static_configs:
+          - targets: ["falco-falcosidekick.falco.svc.cluster.local:2801"]

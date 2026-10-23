@@ -2,5 +2,11 @@ apiVersion: v1
 kind: Namespace
 metadata:
   name: secureflow
-  # CK-07 — missing required labels (app, team).
-  # Pod Security Admission labels also deliberately absent.
+  labels:
+    app: secureflow
+    team: devsecops
+    env: dev
+    owner: devsecops
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
