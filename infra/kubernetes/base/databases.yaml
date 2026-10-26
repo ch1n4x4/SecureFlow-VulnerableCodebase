@@ -59,6 +59,7 @@ spec:
             allowPrivilegeEscalation: false
             runAsNonRoot: true
             runAsUser: 999
+            readOnlyRootFilesystem: true
             capabilities:
               drop:
                 - ALL
@@ -69,6 +70,20 @@ spec:
             requests:
               cpu: "250m"
               memory: "256Mi"
+          volumeMounts:
+            - name: db-data
+              mountPath: /var/lib/postgresql/data
+            - name: db-run
+              mountPath: /var/run/postgresql
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: db-data
+          emptyDir: {}
+        - name: db-run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
@@ -148,6 +163,7 @@ spec:
             allowPrivilegeEscalation: false
             runAsNonRoot: true
             runAsUser: 999
+            readOnlyRootFilesystem: true
             capabilities:
               drop:
                 - ALL
@@ -158,6 +174,20 @@ spec:
             requests:
               cpu: "250m"
               memory: "256Mi"
+          volumeMounts:
+            - name: db-data
+              mountPath: /var/lib/postgresql/data
+            - name: db-run
+              mountPath: /var/run/postgresql
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: db-data
+          emptyDir: {}
+        - name: db-run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
