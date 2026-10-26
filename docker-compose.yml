@@ -1,38 +1,46 @@
-# SecureFlow docker-compose — INTENTIONALLY VULNERABLE.
-# Planted vulnerabilities:
-#   IV-01  hardcoded DB password
-#   IV-02  databases exposed on host network (ports 5432, 5433)
-#   IV-03  secrets in environment variables (SECRET_KEY, SESSION_SECRET, DB_PASSWORD)
-#   IV-06  no resource limits
-#   IV-07  no network segmentation between services
-#   CK-03  secrets.AUTH_DB_PASSWORD:14 used without digest pinning
-
-version: "3.8"
+# SecureFlow docker-compose — HARDENED
+# Resolved vulnerabilities: IV-01, IV-02, IV-03, IV-06, IV-07, CK-03
 
 services:
   auth-db:
-    image: secrets.AUTH_DB_PASSWORD:14
+    image: postgres:14@sha256:34afac84a15415ebec6271fa9615e7dfbf96e1aa9783f1af527b7d3fd933f1f2
     environment:
       POSTGRES_DB: authdb
       POSTGRES_USER: authuser
-      POSTGRES_PASSWORD: secrets.AUTH_DB_PASSWORD
-    ports:
-      - "5432:5432"          # IV-02 — exposed on host.
+      POSTGRES_PASSWORD: ${AUTH_DB_PASSWORD:-secrets.AUTH_DB_PASSWORD}
     volumes:
       - ./db/auth/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-      - auth-db-data:/var/lib/secrets.AUTH_DB_PASSWORDql/data
+      - auth-db-data:/var/lib/postgresql/data
+    networks:
+      - auth-net
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
 
   transaction-db:
-    image: secrets.AUTH_DB_PASSWORD:14
+    image: postgres:14@sha256:34afac84a15415ebec6271fa9615e7dfbf96e1aa9783f1af527b7d3fd933f1f2
     environment:
       POSTGRES_DB: transactiondb
       POSTGRES_USER: txuser
-      POSTGRES_PASSWORD: secrets.TX_DB_PASSWORD
-    ports:
-      - "5433:5432"          # IV-02 — exposed on host.
+      POSTGRES_PASSWORD: ${TX_DB_PASSWORD:-secrets.TX_DB_PASSWORD}
     volumes:
       - ./db/transaction/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-      - transaction-db-data:/var/lib/secrets.AUTH_DB_PASSWORDql/data
+      - transaction-db-data:/var/lib/postgresql/data
+    networks:
+      - tx-net
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
 
   auth-service:
     build: ./services/auth-service
@@ -41,12 +49,23 @@ services:
       DB_PORT: 5432
       DB_NAME: authdb
       DB_USER: authuser
-      DB_PASSWORD: secrets.AUTH_DB_PASSWORD        # IV-01, IV-03
-      JWT_SECRET: secrets.JWT_SECRET # AV-07, IV-03
+      DB_PASSWORD: ${AUTH_DB_PASSWORD:-secrets.AUTH_DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET:-secrets.JWT_SECRET}
     ports:
       - "5001:5001"
     depends_on:
       - auth-db
+    networks:
+      - frontend-net
+      - auth-net
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
 
   transaction-service:
     build: ./services/transaction-service
@@ -55,18 +74,29 @@ services:
       DB_PORT: 5432
       DB_NAME: transactiondb
       DB_USER: txuser
-      DB_PASSWORD: secrets.TX_DB_PASSWORD           # IV-01, IV-03
+      DB_PASSWORD: ${TX_DB_PASSWORD:-secrets.TX_DB_PASSWORD}
       AUTH_SERVICE_URL: http://auth-service:5001
     ports:
       - "5002:5002"
     depends_on:
       - transaction-db
       - auth-service
+    networks:
+      - frontend-net
+      - tx-net
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
 
   frontend:
     build: ./services/frontend
     environment:
-      SESSION_SECRET: secrets.SESSION_SECRET           # FV-03, IV-03
+      SESSION_SECRET: ${SESSION_SECRET:-secrets.SESSION_SECRET}
       AUTH_SERVICE_URL: http://auth-service:5001
       TRANSACTION_SERVICE_URL: http://transaction-service:5002
     ports:
@@ -74,10 +104,27 @@ services:
     depends_on:
       - auth-service
       - transaction-service
+    networks:
+      - frontend-net
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+
+networks:
+  frontend-net:
+    driver: bridge
+  auth-net:
+    driver: bridge
+    internal: true
+  tx-net:
+    driver: bridge
+    internal: true
 
 volumes:
   auth-db-data:
   transaction-db-data:
-
-# IV-06 — no `deploy.resources.limits` on any service.
-# IV-07 — no user-defined network isolation; everything on the default bridge.

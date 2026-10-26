@@ -3,6 +3,12 @@ kind: Deployment
 metadata:
   name: auth-db
   namespace: secureflow
+  labels:
+    svc: auth-db
+    app: auth-db
+    team: devsecops
+    env: dev
+    owner: devsecops
 spec:
   replicas: 1
   selector:
@@ -12,28 +18,83 @@ spec:
     metadata:
       labels:
         svc: auth-db
+        app: auth-db
+        team: devsecops
+        env: dev
+        owner: devsecops
+      annotations:
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/role: "auth-service"
+        vault.hashicorp.com/agent-inject-secret-db-pass: "secureflow/data/auth-service"
+        vault.hashicorp.com/agent-inject-template-db-pass: |
+          {{- with secret "secureflow/data/auth-service" -}}
+          {{ .Data.data.DB_PASSWORD }}
+          {{- end -}}
+        vault.hashicorp.com/agent-limits-cpu: "250m"
+        vault.hashicorp.com/agent-limits-mem: "64Mi"
+        vault.hashicorp.com/agent-requests-cpu: "128m"
+        vault.hashicorp.com/agent-requests-mem: "32Mi"
     spec:
+      serviceAccountName: auth-service
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
       containers:
-        - name: secrets.AUTH_DB_PASSWORD
-          image: secrets.AUTH_DB_PASSWORD:14    # CK-03 — no digest pinning.
+        - name: postgres
+          image: postgres:14@sha256:34afac84a15415ebec6271fa9615e7dfbf96e1aa9783f1af527b7d3fd933f1f2
           env:
             - name: POSTGRES_DB
               value: authdb
             - name: POSTGRES_USER
               value: authuser
-            - name: POSTGRES_PASSWORD
-              valueFrom:
-                configMapKeyRef:
-                  name: secureflow-config
-                  key: AUTH_DB_PASSWORD
+            - name: POSTGRES_PASSWORD_FILE
+              value: /vault/secrets/db-pass
           ports:
             - containerPort: 5432
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 999
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+          volumeMounts:
+            - name: db-data
+              mountPath: /var/lib/postgresql/data
+            - name: db-run
+              mountPath: /var/run/postgresql
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: db-data
+          emptyDir: {}
+        - name: db-run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: auth-db
   namespace: secureflow
+  labels:
+    app: auth-db
+    team: devsecops
+    env: dev
+    owner: devsecops
 spec:
   selector:
     svc: auth-db
@@ -46,6 +107,12 @@ kind: Deployment
 metadata:
   name: transaction-db
   namespace: secureflow
+  labels:
+    svc: transaction-db
+    app: transaction-db
+    team: devsecops
+    env: dev
+    owner: devsecops
 spec:
   replicas: 1
   selector:
@@ -55,28 +122,83 @@ spec:
     metadata:
       labels:
         svc: transaction-db
+        app: transaction-db
+        team: devsecops
+        env: dev
+        owner: devsecops
+      annotations:
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/role: "transaction-service"
+        vault.hashicorp.com/agent-inject-secret-db-pass: "secureflow/data/transaction-service"
+        vault.hashicorp.com/agent-inject-template-db-pass: |
+          {{- with secret "secureflow/data/transaction-service" -}}
+          {{ .Data.data.DB_PASSWORD }}
+          {{- end -}}
+        vault.hashicorp.com/agent-limits-cpu: "250m"
+        vault.hashicorp.com/agent-limits-mem: "64Mi"
+        vault.hashicorp.com/agent-requests-cpu: "128m"
+        vault.hashicorp.com/agent-requests-mem: "32Mi"
     spec:
+      serviceAccountName: transaction-service
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
       containers:
-        - name: secrets.AUTH_DB_PASSWORD
-          image: secrets.AUTH_DB_PASSWORD:14
+        - name: postgres
+          image: postgres:14@sha256:34afac84a15415ebec6271fa9615e7dfbf96e1aa9783f1af527b7d3fd933f1f2
           env:
             - name: POSTGRES_DB
               value: transactiondb
             - name: POSTGRES_USER
               value: txuser
-            - name: POSTGRES_PASSWORD
-              valueFrom:
-                configMapKeyRef:
-                  name: secureflow-config
-                  key: TX_DB_PASSWORD
+            - name: POSTGRES_PASSWORD_FILE
+              value: /vault/secrets/db-pass
           ports:
             - containerPort: 5432
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 999
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+          volumeMounts:
+            - name: db-data
+              mountPath: /var/lib/postgresql/data
+            - name: db-run
+              mountPath: /var/run/postgresql
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: db-data
+          emptyDir: {}
+        - name: db-run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: transaction-db
   namespace: secureflow
+  labels:
+    app: transaction-db
+    team: devsecops
+    env: dev
+    owner: devsecops
 spec:
   selector:
     svc: transaction-db

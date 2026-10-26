@@ -1,8 +1,5 @@
-# SecureFlow Terraform — INTENTIONALLY VULNERABLE baseline.
-# Planted vulnerabilities are tagged with their Vulnerability Index ID.
-# DO NOT `terraform apply` this against a real AWS account — Checkov should
-# block it in the pipeline. The purpose of this tree is to give interns
-# something Checkov can flag.
+# SecureFlow Terraform — HARDENED
+# Resolved vulnerabilities: IV-01, IV-02, IV-08, IV-09, IV-10
 
 terraform {
   required_version = ">= 1.5.0"
@@ -33,6 +30,13 @@ variable "environment" {
   default = "dev"
 }
 
+# IV-01 Resolved — Injected dynamically at runtime via TF_VAR_db_password or Vault
+variable "db_password" {
+  description = "Master password for RDS PostgreSQL instances"
+  type        = string
+  sensitive   = true
+}
+
 module "vpc" {
   source      = "./modules/vpc"
   project     = var.project
@@ -40,8 +44,9 @@ module "vpc" {
 }
 
 module "iam" {
-  source  = "./modules/iam"
-  project = var.project
+  source      = "./modules/iam"
+  project     = var.project
+  environment = var.environment
 }
 
 module "s3" {
@@ -50,18 +55,19 @@ module "s3" {
 }
 
 module "eks" {
-  source            = "./modules/eks"
-  project           = var.project
-  environment       = var.environment
-  vpc_id            = module.vpc.vpc_id
-  public_subnet_ids = module.vpc.public_subnet_ids
+  source             = "./modules/eks"
+  project            = var.project
+  environment        = var.environment
+  vpc_id             = module.vpc.vpc_id
+  private_subnet_ids = module.vpc.private_subnet_ids
 }
 
 module "rds" {
-  source            = "./modules/rds"
-  project           = var.project
-  environment       = var.environment
-  vpc_id            = module.vpc.vpc_id
-  public_subnet_ids = module.vpc.public_subnet_ids
-  db_password       = "secrets.AUTH_DB_PASSWORD" # IV-01 — hardcoded DB password reused from docker-compose.
+  source             = "./modules/rds"
+  project            = var.project
+  environment        = var.environment
+  vpc_id             = module.vpc.vpc_id
+  private_subnet_ids = module.vpc.private_subnet_ids
+  vpc_cidr_block     = module.vpc.vpc_cidr_block
+  db_password        = var.db_password
 }

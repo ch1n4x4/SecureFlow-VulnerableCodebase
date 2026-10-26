@@ -1,0 +1,47 @@
+# Loki + Promtail Helm Values — Centralised Log Aggregation (Step 16)
+loki:
+  enabled: true
+  isDefault: false
+  persistence:
+    enabled: false
+  config:
+    schema_config:
+      configs:
+        - from: "2024-01-01"
+          store: boltdb-shipper
+          object_store: filesystem
+          schema: v11
+          index:
+            prefix: index_
+            period: 24h
+
+promtail:
+  enabled: true
+  config:
+    snippets:
+      pipelineStages:
+        - docker: {}
+        - match:
+            selector: '{namespace="falco"}'
+            stages:
+              - json:
+                  expressions:
+                    priority: priority
+                    rule: rule
+              - labels:
+                  priority:
+                  rule:
+        - match:
+            selector: '{namespace="secureflow"}'
+            stages:
+              - regex:
+                  expression: '(?P<method>GET|POST|PUT|DELETE)\s+(?P<path>/[^\s]*)\s+HTTP/[0-9.]+"\s+(?P<status>[0-9]{3})'
+              - labels:
+                  method:
+                  status:
+
+grafana:
+  enabled: false
+
+prometheus:
+  enabled: false

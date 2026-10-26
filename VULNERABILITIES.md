@@ -64,7 +64,7 @@ every ID, followed by remediations that resolve them.
 |-------|----------------------------------------|----------|
 | CK-01 | Vulnerable base image                  | All Dockerfiles use `python:3.9-slim` |
 | CK-02 | No non-root user                       | No USER directive in any Dockerfile |
-| CK-03 | Unpinned image tags                    | `docker-compose.yml` and K8s base use `secrets.AUTH_DB_PASSWORD:14`, `:latest` |
+| CK-03 | Unpinned image tags                    | `docker-compose.yml` and K8s base use `postgres:14`, `:latest` |
 | CK-04 | Privileged containers                  | `infra/kubernetes/base/*-service.yaml` — `privileged: true` |
 | CK-05 | No resource limits                     | K8s base deployments — no `resources:` block |
 | CK-06 | `:latest` image tag                    | K8s base uses `image: secureflow/*:latest` |

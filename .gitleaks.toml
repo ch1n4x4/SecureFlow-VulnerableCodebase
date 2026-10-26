@@ -1,0 +1,78 @@
+title = "SecureFlow Gitleaks Configuration"
+
+[extend]
+useDefault = true
+
+# ---------------------------------------------------------------------------
+# SecureFlow-specific secret rules
+# ---------------------------------------------------------------------------
+[[rules]]
+id = "secureflow-aws-access-key-id"
+description = "SecureFlow AWS access key ID"
+regex = '''(?i)\bAWS_ACCESS_KEY_ID\s*[:=]\s*["']?([^\s"',]{4,})["']?'''
+secretGroup = 1
+keywords = ["AWS_ACCESS_KEY_ID"]
+tags = ["secureflow", "aws", "credential"]
+
+[[rules]]
+id = "secureflow-aws-secret-access-key"
+description = "SecureFlow AWS secret access key"
+regex = '''(?i)\bAWS_SECRET_ACCESS_KEY\s*[:=]\s*["']?([^\s"',]{4,})["']?'''
+secretGroup = 1
+keywords = ["AWS_SECRET_ACCESS_KEY"]
+tags = ["secureflow", "aws", "credential"]
+
+[[rules]]
+id = "secureflow-ath-db-password"
+description = "SecureFlow authentication database password"
+regex = '''(?i)\bAUTH_DB_PASSWORD\s*[:=]\s*["']?([^\s"',]{4,})["']?'''
+secretGroup = 1
+keywords = ["AUTH_DB_PASSWORD"]
+tags = ["secureflow", "database", "password"]
+
+[[rules]]
+id = "secureflow-transaction-db-password"
+description = "SecureFlow transaction database password"
+regex = '''(?i)\bTRANSACTION_DB_PASSWORD\s*[:=]\s*["']?([^\s"',]{4,})["']?'''
+secretGroup = 1
+keywords = ["TRANSACTION_DB_PASSWORD"]
+tags = ["secureflow", "database", "password"]
+
+[[rules]]
+id = "secureflow-jwt-secret"
+description = "SecureFlow JWT signing secret"
+regex = '''(?i)\bJWT_SECRET\s*[:=]\s*["']?([^\s"',]{4,})["']?'''
+secretGroup = 1
+keywords = ["JWT_SECRET"]
+tags = ["flask", "jwt", "secret"]
+
+[[rules]]
+id = "flask-secret-key"
+description = "Flask SECRET_KEY / JWT_SECRET / SESSION_SECRET assigned as a literal value"
+regex = '''(?i)(?:SECRET_KEY|JWT_SECRET|SESSION_SECRET)\s*[:=]\s*["']?([^\s"',]{4,})["']?'''
+secretGroup = 1
+tags = ["flask", "secret", "hardcoded"]
+
+[[rules]]
+id = "postgres-connection-string"
+description = "Hardcoded PostgreSQL password assignment"
+regex = '''(?i)(?:POSTGRES_PASSWORD|DB_PASSWORD)\s*[:=]\s*["']?([^\s"',]{4,})["']?'''
+secretGroup = 1
+tags = ["database", "secret", "hardcoded"]
+
+[[rules]]
+id = "postgres-uri"
+description = "Full PostgreSQL connection URI with embedded credentials"
+regex = '''postgres(?:ql)?:\/\/[^:\s]+:[^@\s]+@[^\/\s]+'''
+tags = ["database", "connection-string"]
+
+[allowlist]
+description = "Global allowlist for SecureFlow"
+regexTarget = "line"
+regexes = [
+    '''secrets\.[a-zA-Z0-9_]+''',
+    '''os\.getenv\(''',
+    '''\$\{SONAR_TOKEN\}''',
+    '''var\.[a-zA-Z0-9_]+''',
+    '''\$\{[a-zA-Z0-9_]+'''
+]

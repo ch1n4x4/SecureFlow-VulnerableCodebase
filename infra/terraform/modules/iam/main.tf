@@ -1,13 +1,20 @@
 variable "project" { type = string }
+variable "environment" {
+  type    = string
+  default = "dev"
+}
+variable "oidc_provider_arn" {
+  type    = string
+  default = "arn:aws:iam::123456789012:oidc-provider/oidc.eks.eu-west-2.amazonaws.com/id/EXAMPLE"
+}
+variable "oidc_provider_url" {
+  type    = string
+  default = "oidc.eks.eu-west-2.amazonaws.com/id/EXAMPLE"
+}
 
-# IV-08 — EKS node role is given AdministratorAccess.
-# Remediation: scope to specific managed policies (AmazonEKSWorkerNodePolicy,
-# AmazonEKS_CNI_Policy, AmazonEC2ContainerRegistryReadOnly) and use IRSA for
-# application pods that need AWS access.
-
+# IV-08 Resolved — Scoped EKS worker node IAM role (no AdministratorAccess)
 resource "aws_iam_role" "eks_node" {
   name = "${var.project}-eks-node-role"
-
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -20,37 +27,54 @@ resource "aws_iam_role" "eks_node" {
   })
 }
 
-resource "aws_iam_role_policy_attachment" "admin_access" {
+resource "aws_iam_role_policy_attachment" "eks_worker_node" {
   role       = aws_iam_role.eks_node.name
-  policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess" # IV-08
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
 }
 
-# A second role used by the app pods — also over-privileged.
+resource "aws_iam_role_policy_attachment" "eks_cni" {
+  role       = aws_iam_role.eks_node.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
+}
+
+resource "aws_iam_role_policy_attachment" "ecr_readonly" {
+  role       = aws_iam_role.eks_node.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+}
+
+# IV-08 Resolved — IRSA role for application pods with least-privilege permissions
 resource "aws_iam_role" "app_role" {
   name = "${var.project}-app-role"
-
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Action = "sts:AssumeRole"
+      Action = "sts:AssumeRoleWithWebIdentity"
       Effect = "Allow"
       Principal = {
-        Service = "ec2.amazonaws.com"
+        Federated = var.oidc_provider_arn
+      }
+      Condition = {
+        StringEquals = {
+          "${var.oidc_provider_url}:sub" = "system:serviceaccount:secureflow:auth-service"
+          "${var.oidc_provider_url}:aud" = "sts.amazonaws.com"
+        }
       }
     }]
   })
 }
 
-resource "aws_iam_role_policy" "app_inline" {
-  name = "${var.project}-app-inline"
+resource "aws_iam_role_policy" "app_least_privilege" {
+  name = "${var.project}-app-s3-readonly"
   role = aws_iam_role.app_role.id
-
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect   = "Allow"
-      Action   = "*"     # IV-08 — wildcard action.
-      Resource = "*"     # IV-08 — wildcard resource.
+      Effect = "Allow"
+      Action = [
+        "s3:GetObject",
+        "s3:PutObject"
+      ]
+      Resource = "arn:aws:s3:::${var.project}-artifacts/*"
     }]
   })
 }

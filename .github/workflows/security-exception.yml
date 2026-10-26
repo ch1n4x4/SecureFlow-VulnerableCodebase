@@ -1,0 +1,46 @@
+name: Security Gate Exception Audit Trigger
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  issues: write
+  pull-requests: write
+  contents: read
+
+jobs:
+  audit-exception:
+    name: "Process /security-exception Request"
+    if: ${{ github.event.issue.pull_request && startsWith(github.event.comment.body, '/security-exception') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Record Audited Security Exception & Post Confirmation
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          ACTOR: ${{ github.event.comment.user.login }}
+          BODY: ${{ github.event.comment.body }}
+          TIMESTAMP: ${{ github.event.comment.created_at }}
+        run: |
+          JUSTIFICATION="${BODY#/security-exception}"
+          JUSTIFICATION="$(echo "${JUSTIFICATION}" | sed 's/^[[:space:]]*//')"
+
+          if [[ -z "${JUSTIFICATION}" ]]; then
+            gh api -X POST "repos/${REPO}/issues/${PR_NUMBER}/comments" \
+              -f body="### Security Exception Rejected
+          A written justification and target remediation release are mandatory.
+          **Usage:** \`/security-exception <written justification and target fix date>\`"
+            exit 1
+          fi
+
+          gh api -X POST "repos/${REPO}/issues/${PR_NUMBER}/labels" \
+            -f "labels[]=security-exception-requested" || true
+
+          gh api -X POST "repos/${REPO}/issues/${PR_NUMBER}/comments" \
+            -f body="### Audited Security Exception Logged
+          - **Requested By:** @${ACTOR}
+          - **Timestamp (UTC):** \`${TIMESTAMP}\`
+          - **Justification:** ${JUSTIFICATION}
+          - **SLA / Expiration:** Time-bounded to next release cycle per [Security Gate Policy](https://github.com/${REPO}/blob/main/docs/security-gate-policy.md)."

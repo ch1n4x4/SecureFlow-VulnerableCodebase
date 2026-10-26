@@ -3,12 +3,12 @@ kind: ConfigMap
 metadata:
   name: secureflow-config
   namespace: secureflow
+  labels:
+    app: secureflow
+    team: devsecops
+    env: dev
+    owner: devsecops
 data:
-  # CK-09 — secrets in plaintext ConfigMap.
-  # Remediation in Step 14: migrate to Vault Agent Injector.
-  JWT_SECRET: "secrets.JWT_SECRET"
-  SESSION_SECRET: "secrets.SESSION_SECRET"
-  AUTH_DB_PASSWORD: "secrets.AUTH_DB_PASSWORD"
-  TX_DB_PASSWORD: "secrets.TX_DB_PASSWORD"
+  # CK-09 Resolved — All secrets migrated to HashiCorp Vault Agent Injector.
   AUTH_SERVICE_URL: "http://auth-service:5001"
   TRANSACTION_SERVICE_URL: "http://transaction-service:5002"
