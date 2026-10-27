@@ -76,3 +76,10 @@ regexes = [
     '''var\.[a-zA-Z0-9_]+''',
     '''\$\{[a-zA-Z0-9_]+'''
 ]
+paths = [
+    '''(?i)(^|/)README\.md$''',
+    '''(?i)(^|/)SETUP\.md$''',
+    '''(?i)(^|/)TROUBLESHOOTING\.md$''',
+    '''(?i)(^|/)VULNERABILITIES\.md$''',
+    '''(?i)(^|/)docs/.*\.md$'''
+]
